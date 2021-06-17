@@ -45,12 +45,15 @@ func (a *AppDeploy) Init(client *client.Client, appService *appv1.AppService, ct
 	return nil
 }
 
+func (a *AppDeploy) Configure() bool {
+	return true
+}
 func (a *AppDeploy) Exist() (bool, error) {
 	return a.Old != nil, nil
 }
 
 func (a *AppDeploy) Create() error {
-	deploy := a.newDeploy(a.App, nil)
+	deploy := a.newDeploy()
 	if err := (*a.Client).Create(context.TODO(), deploy); err != nil {
 		return err
 	}
@@ -61,7 +64,7 @@ func (a *AppDeploy) NeedUpdate() (bool, error) {
 	if a.Old == nil {
 		return false, errors.NewServiceUnavailable("no old deployment,can't update")
 	}
-	deploy := a.newDeploy(a.App, a.Old.Annotations)
+	deploy := a.newDeploy()
 
 	oldSpec := appv1.AppServiceSpec{}
 	if oldSpecStr, ok := a.Old.Annotations[AnnotationName]; ok && oldSpecStr != "" {
@@ -76,7 +79,7 @@ func (a *AppDeploy) NeedUpdate() (bool, error) {
 	return false, nil
 }
 func (a *AppDeploy) Update() error {
-	deploy := a.newDeploy(a.App, a.Old.Annotations)
+	deploy := a.newDeploy()
 	a.Old.Spec = deploy.Spec
 	if err := (*a.Client).Update(context.TODO(), a.Old); err != nil {
 		return err
@@ -85,24 +88,29 @@ func (a *AppDeploy) Update() error {
 	return nil
 }
 
-func (a *AppDeploy) newDeploy(app *appv1.AppService, annotations map[string]string) *appsv1.Deployment {
-	labels := map[string]string{"app": app.Name}
+func (a *AppDeploy) newDeploy() *appsv1.Deployment {
+	labels := map[string]string{"app": a.App.Name}
 	selector := &metav1.LabelSelector{MatchLabels: labels}
 
 	spec := appsv1.DeploymentSpec{
-		Replicas: &app.Spec.Size,
+		Replicas: &a.App.Spec.Size,
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: labels,
 			},
 			Spec: corev1.PodSpec{
-				Containers: newContainers(app),
+				Containers: a.newContainers(),
 			},
 		},
 		Selector: selector,
 	}
 
-	annotations = a.generateAnnotations(spec, annotations)
+	var annotations map[string]string
+	if a.Old != nil {
+		annotations = a.generateAnnotations(spec, a.Old.Annotations)
+	} else {
+		annotations = a.generateAnnotations(spec, nil)
+	}
 
 	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -110,11 +118,11 @@ func (a *AppDeploy) newDeploy(app *appv1.AppService, annotations map[string]stri
 			APIVersion: "apps/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        app.Name,
-			Namespace:   app.Namespace,
+			Name:        a.App.Name,
+			Namespace:   a.App.Namespace,
 			Annotations: annotations,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(app, schema.GroupVersionKind{
+				*metav1.NewControllerRef(a.App, schema.GroupVersionKind{
 					Group:   v1.SchemeGroupVersion.Group,
 					Version: v1.SchemeGroupVersion.Version,
 					Kind:    "AppService",
@@ -125,21 +133,21 @@ func (a *AppDeploy) newDeploy(app *appv1.AppService, annotations map[string]stri
 	}
 }
 
-func newContainers(app *appv1.AppService) []corev1.Container {
+func (a *AppDeploy) newContainers() []corev1.Container {
 	containerPorts := []corev1.ContainerPort{}
-	for _, svcPort := range app.Spec.Ports {
+	if a.App.Spec.Port.Port != 0 {
 		cport := corev1.ContainerPort{}
-		cport.ContainerPort = svcPort.TargetPort.IntVal
+		cport.ContainerPort = a.App.Spec.Port.TargetPort.IntVal
 		containerPorts = append(containerPorts, cport)
 	}
 	return []corev1.Container{
 		{
-			Name:            app.Name,
-			Image:           app.Spec.Image,
-			Resources:       app.Spec.Resources,
+			Name:            a.App.Name,
+			Image:           a.App.Spec.Image,
+			Resources:       a.App.Spec.Resources,
 			Ports:           containerPorts,
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			Env:             app.Spec.Envs,
+			Env:             a.App.Spec.Envs,
 		},
 	}
 }

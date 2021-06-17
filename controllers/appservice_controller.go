@@ -81,10 +81,12 @@ func (r *AppServiceReconciler) Reconcile(ctx context.Context, request reconcile.
 	appIList := []service.AppInterface{
 		&service.AppDeploy{},
 		&service.AppService{},
+		&service.AppIngress{},
 	}
 
 	for _, i := range appIList {
 		serviceLog := reqLogger.WithValues("service", i.Name())
+		serviceLog.Info(i.Name() + "Start Service")
 
 		if err := i.Init(&r.Client, instance, &ctx, request, &serviceLog); err != nil {
 			serviceLog.Info("service init err:" + err.Error())
@@ -95,6 +97,15 @@ func (r *AppServiceReconciler) Reconcile(ctx context.Context, request reconcile.
 			serviceLog.Info("service exist err:" + err.Error())
 			return reconcile.Result{}, err
 		}
+		if !i.Configure() {
+			// this service no config - ignore
+			serviceLog.Info("service not config")
+			//if exist {
+			//	// todo add delete service
+			//}
+			return reconcile.Result{}, nil
+		}
+
 		if !exist {
 			// not exist -> create
 			if err = i.Create(); err != nil {
@@ -119,8 +130,10 @@ func (r *AppServiceReconciler) Reconcile(ctx context.Context, request reconcile.
 			serviceLog.Info("service update err:" + err.Error())
 			return reconcile.Result{}, err
 		}
-		serviceLog.Info("reconciling success")
+		serviceLog.Info(i.Name() + "Success Service")
 	}
+	reqLogger.Info("reconciling success")
+
 	return reconcile.Result{}, nil
 }
 

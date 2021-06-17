@@ -6,13 +6,15 @@ metadata:
 spec:
   size: 2
   image: nginx:1.7.9
-  ports:
-    - port: 80
-      nodePort: 30001
-      targetPort: 80
+  port:
+    port: 80
+    nodePort: 30002
+    targetPort: 80
   envs:
     - name: EnvA
       value: valueA
     - name: EnvB
-      value: "12"
-
+      value: "13"
+  ingress:
+    host: samples.appservice.qyapp.com
+    path: /api/v2/design

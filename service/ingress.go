@@ -6,7 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	appv1 "github.com/qinya0/k8s-operator-demo/api/v1"
 	v1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -15,56 +15,53 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type AppService struct {
+type AppIngress struct {
 	BaseService
-	Old *corev1.Service
+	Old *v1beta1.Ingress
 }
 
-func (a *AppService) Name() string {
-	return "Service"
+func (a *AppIngress) Name() string {
+	return "Ingress"
 }
 
-func (a *AppService) Init(client *client.Client, appService *appv1.AppService, ctx *context.Context, request reconcile.Request, log *logr.Logger) error {
+func (a *AppIngress) Init(client *client.Client, appService *appv1.AppService, ctx *context.Context, request reconcile.Request, log *logr.Logger) error {
 	_ = a.BaseService.Init(client, appService, ctx, request, log)
 
-	// get svc
-	svc := &corev1.Service{}
-	if err := (*a.BaseService.Client).Get(context.TODO(), request.NamespacedName, svc); err != nil {
+	// get ing
+	ing := &v1beta1.Ingress{}
+	if err := (*a.BaseService.Client).Get(context.TODO(), request.NamespacedName, ing); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 		// not found
 		a.Old = nil
 	} else {
-		a.Old = svc
+		a.Old = ing
 		if a.Old.Annotations == nil {
 			a.Old.Annotations = map[string]string{}
 		}
 	}
 	return nil
 }
-func (a *AppService) Configure() bool {
-	return a.App.Spec.Port.Port != 0
+func (a *AppIngress) Configure() bool {
+	return a.App.Spec.Ingress.Host != "" && a.App.Spec.Ingress.Path != "" && a.App.Spec.Port.Port != 0
 }
-func (a *AppService) Exist() (bool, error) {
-
+func (a *AppIngress) Exist() (bool, error) {
 	return a.Old != nil, nil
 }
-
-func (a *AppService) Create() error {
-	svc := a.newService()
-	if err := (*a.Client).Create(context.TODO(), svc); err != nil {
+func (a *AppIngress) Create() error {
+	ing := a.newIngress()
+	if err := (*a.Client).Create(context.TODO(), ing); err != nil {
 		return err
 	}
-	(*a.Log).Info("create svc:" + a.App.Name)
+	(*a.Log).Info("create ing:" + a.App.Name)
 	return nil
 }
-
-func (a *AppService) NeedUpdate() (bool, error) {
+func (a *AppIngress) NeedUpdate() (bool, error) {
 	if a.Old == nil {
-		return false, errors.NewServiceUnavailable("no old svc,can't update")
+		return false, errors.NewServiceUnavailable("no old ing,can't update")
 	}
-	svc := a.newService()
+	ing := a.newIngress()
 
 	oldSpec := appv1.AppServiceSpec{}
 	if oldSpecStr, ok := a.Old.Annotations[AnnotationName]; ok && oldSpecStr != "" {
@@ -73,29 +70,42 @@ func (a *AppService) NeedUpdate() (bool, error) {
 		}
 	}
 
-	if !reflect.DeepEqual(svc.Spec, oldSpec) {
+	if !reflect.DeepEqual(ing.Spec, oldSpec) {
 		return true, nil
 	}
 	return false, nil
 }
-func (a *AppService) Update() error {
-	svc := a.newService()
-	a.Old.Spec = svc.Spec
+func (a *AppIngress) Update() error {
+	ing := a.newIngress()
+	a.Old.Spec = ing.Spec
 	if err := (*a.Client).Update(context.TODO(), a.Old); err != nil {
 		return err
 	}
-	(*a.Log).Info("update svc")
+	(*a.Log).Info("update ing")
 	return nil
 }
-
-func (a *AppService) newService() *corev1.Service {
-	spec := corev1.ServiceSpec{
-		Type:  corev1.ServiceTypeNodePort,
-		Ports: []corev1.ServicePort{a.App.Spec.Port},
-		Selector: map[string]string{
-			"app": a.App.Name,
+func (a *AppIngress) newIngress() *v1beta1.Ingress {
+	spec := v1beta1.IngressSpec{
+		Rules: []v1beta1.IngressRule{
+			{
+				Host: a.App.Spec.Ingress.Host,
+				IngressRuleValue: v1beta1.IngressRuleValue{
+					HTTP: &v1beta1.HTTPIngressRuleValue{
+						Paths: []v1beta1.HTTPIngressPath{
+							{
+								Path: a.App.Spec.Ingress.Path,
+								Backend: v1beta1.IngressBackend{
+									ServiceName: a.App.Name,
+									ServicePort: a.App.Spec.Port.TargetPort,
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
+
 	var annotations map[string]string
 	if a.Old != nil {
 		annotations = a.generateAnnotations(spec, a.Old.Annotations)
@@ -103,10 +113,10 @@ func (a *AppService) newService() *corev1.Service {
 		annotations = a.generateAnnotations(spec, nil)
 	}
 
-	svc := &corev1.Service{
+	return &v1beta1.Ingress{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Service",
-			APIVersion: "v1",
+			Kind:       "Ingress",
+			APIVersion: "networking.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        a.App.Name,
@@ -122,8 +132,4 @@ func (a *AppService) newService() *corev1.Service {
 		},
 		Spec: spec,
 	}
-	if a.Old != nil && a.Old.Spec.ClusterIP != "" {
-		svc.Spec.ClusterIP = a.Old.Spec.ClusterIP
-	}
-	return svc
 }

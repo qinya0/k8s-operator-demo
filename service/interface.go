@@ -12,10 +12,12 @@ import (
 type AppInterface interface {
 	Name() string
 	Init(Client *client.Client, appService *appv1.AppService, ctx *context.Context, request reconcile.Request, log *logr.Logger) error
+	Configure() bool // 是否需要创建和更新
 	Exist() (bool, error)
 	Create() error
 	NeedUpdate() (bool, error)
 	Update() error
+	Delete() error // todo 同步删除
 }
 
 type BaseService struct {
@@ -40,6 +42,10 @@ func (a *BaseService) Init(client *client.Client, appService *appv1.AppService, 
 	return nil
 }
 
+func (a *BaseService) Configure() bool {
+	return false
+}
+
 func (a *BaseService) Exist() (bool, error) {
 	return false, nil
 }
@@ -50,6 +56,10 @@ func (a *BaseService) NeedUpdate() (bool, error) {
 	return false, nil
 }
 func (a *BaseService) Update() error {
+	return nil
+}
+
+func (a *BaseService) Delete() error {
 	return nil
 }
 

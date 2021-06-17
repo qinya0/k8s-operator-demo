@@ -40,8 +40,13 @@ type AppServiceSpec struct {
 	// resource for deploy
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	Envs      []corev1.EnvVar             `json:"envs,omitempty"`
-	Ports     []corev1.ServicePort        `json:"ports,omitempty"`
-	Ingress   v1beta1.IngressSpec         `json:"ingress,omitempty"`
+	Port      corev1.ServicePort          `json:"port,omitempty"`
+	Ingress   AppIng                      `json:"ingress,omitempty"`
+}
+
+type AppIng struct {
+	Path string `json:"path"`
+	Host string `json:"host"`
 }
 
 // AppServiceStatus defines the observed state of AppService
@@ -50,6 +55,7 @@ type AppServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	DeployStatus appsv1.DeploymentStatus `json:"DeployStatus"`
 	SvcStatus    corev1.ServiceStatus    `json:"SvcStatus"`
+	IngStatus    v1beta1.IngressStatus   `json:"IngStatus"`
 }
 
 //+kubebuilder:object:root=true
