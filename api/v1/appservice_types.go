@@ -19,6 +19,7 @@ package v1
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,12 +31,17 @@ type AppServiceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of AppService. Edit appservice_types.go to remove/update
-	Size      int32                       `json:"size"`
-	Image     string                      `json:"image"`
+	// number of replicas
+	Size int32 `json:"size"`
+
+	// image for container
+	Image string `json:"image"`
+
+	// resource for deploy
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	Envs      []corev1.EnvVar             `json:"envs,omitempty"`
 	Ports     []corev1.ServicePort        `json:"ports,omitempty"`
+	Ingress   v1beta1.IngressSpec         `json:"ingress,omitempty"`
 }
 
 // AppServiceStatus defines the observed state of AppService

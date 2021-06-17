@@ -2,12 +2,17 @@ apiVersion: app.qy.com/v1
 kind: AppService
 metadata:
   name: appservice-sample
+  namespace: qyapp
 spec:
-  # Add fields here
   size: 2
   image: nginx:1.7.9
   ports:
     - port: 80
       nodePort: 30001
       targetPort: 80
+  envs:
+    - name: EnvA
+      value: valueA
+    - name: EnvB
+      value: "12"
 
