@@ -80,6 +80,7 @@ func (r *AppServiceReconciler) Reconcile(ctx context.Context, request reconcile.
 	//   如果不需要更新，则正常返回
 	appIList := []service.AppInterface{
 		&service.AppDeploy{},
+		&service.AppService{},
 	}
 
 	for _, i := range appIList {
