@@ -18,10 +18,11 @@ package controllers
 
 import (
 	"context"
-	"github.com/qinya0/k8s-operator-demo/service"
+	"github.com/qinya0/k8s-operator-demo/service/base"
 	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"strconv"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,37 +55,29 @@ func (r *AppServiceReconciler) Reconcile(ctx context.Context, request reconcile.
 	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling AppService")
 
+	isDeleted := false
+
 	// Fetch the AppService instance
 	instance := &appv1.AppService{}
 	err := r.Client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			reqLogger.Info("not found")
-			return reconcile.Result{}, nil
+		if !errors.IsNotFound(err) {
+			// Error reading the object - requeue the request.
+			return reconcile.Result{}, err
 		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
+		reqLogger.Info("not found")
+		isDeleted = true
 	}
-
 	if instance.DeletionTimestamp != nil {
-		reqLogger.Info(" instance DeletionTimestamp")
-		return reconcile.Result{}, err
+		isDeleted = true
 	}
 
 	// 如果不存在，则创建关联资源
 	// 如果存在，判断是否需要更新
 	//   如果需要更新，则直接更新
 	//   如果不需要更新，则正常返回
-	appIList := []service.AppInterface{
-		&service.AppDeploy{},
-		&service.AppService{},
-		&service.AppIngress{},
-	}
 
-	for _, i := range appIList {
+	for _, i := range interfaceList {
 		serviceLog := reqLogger.WithValues("service", i.Name())
 		serviceLog.Info(i.Name() + "Start Service")
 
@@ -97,42 +90,45 @@ func (r *AppServiceReconciler) Reconcile(ctx context.Context, request reconcile.
 			serviceLog.Info("service exist err:" + err.Error())
 			return reconcile.Result{}, err
 		}
-		if !i.Configure() {
-			// this service no config - ignore
-			serviceLog.Info("service not config")
-			//if exist {
-			//	// todo add delete service
+		if isDeleted && exist {
+			// object对象设置OwnerReferences属性之后，当instance删除之后 下属资源会自动清理
+			//err = i.Delete()
+			//if err != nil {
+			//	serviceLog.Error(err, "service delete err")
 			//}
-			return reconcile.Result{}, nil
+			serviceLog.Info("Success Service")
+			continue
 		}
 
 		if !exist {
 			// not exist -> create
 			if err = i.Create(); err != nil {
-				serviceLog.Info("service create err:" + err.Error())
+				serviceLog.Error(err, "service create err:")
 				return reconcile.Result{}, err
 			}
 			// create ok
-			return reconcile.Result{}, nil
+			serviceLog.Info("Success Service")
+			continue
 		}
 
 		// exist -> check needUpdate
 		needUpdate, err := i.NeedUpdate()
 		if err != nil {
-			serviceLog.Info("service needUpdate err:" + err.Error())
+			serviceLog.Error(err, "service needUpdate err:")
 			return reconcile.Result{}, err
 		}
 		if !needUpdate {
-			return reconcile.Result{}, nil
+			serviceLog.Info("Success Service")
+			continue
 		}
 		// update
 		if err = i.Update(); err != nil {
-			serviceLog.Info("service update err:" + err.Error())
+			serviceLog.Error(err, "service update err:")
 			return reconcile.Result{}, err
 		}
-		serviceLog.Info(i.Name() + "Success Service")
+		serviceLog.Info("Success Service")
 	}
-	reqLogger.Info("reconciling success")
+	reqLogger.Info("reconciling success:" + strconv.Itoa(len(interfaceList)))
 
 	return reconcile.Result{}, nil
 }
@@ -142,4 +138,19 @@ func (r *AppServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appv1.AppService{}).
 		Complete(r)
+}
+
+var interfaceList []base.AppInterface
+
+func init() {
+	interfaceList = []base.AppInterface{}
+}
+
+func RegistryInterface(i base.AppInterface) {
+	for _, oldI := range interfaceList {
+		if oldI.Name() == i.Name() {
+			panic("can't registry same name interface twice")
+		}
+	}
+	interfaceList = append(interfaceList, i)
 }

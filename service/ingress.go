@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"github.com/go-logr/logr"
 	appv1 "github.com/qinya0/k8s-operator-demo/api/v1"
+	"github.com/qinya0/k8s-operator-demo/controllers"
+	"github.com/qinya0/k8s-operator-demo/service/base"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,8 +18,12 @@ import (
 )
 
 type AppIngress struct {
-	BaseService
+	base.BaseService
 	Old *v1beta1.Ingress
+}
+
+func init() {
+	controllers.RegistryInterface(&AppIngress{})
 }
 
 func (a *AppIngress) Name() string {
@@ -64,7 +70,7 @@ func (a *AppIngress) NeedUpdate() (bool, error) {
 	ing := a.newIngress()
 
 	oldSpec := appv1.AppServiceSpec{}
-	if oldSpecStr, ok := a.Old.Annotations[AnnotationName]; ok && oldSpecStr != "" {
+	if oldSpecStr, ok := a.Old.Annotations[base.AnnotationName]; ok && oldSpecStr != "" {
 		if err := json.Unmarshal([]byte(oldSpecStr), &oldSpec); err != nil {
 			return false, err
 		}
@@ -84,6 +90,20 @@ func (a *AppIngress) Update() error {
 	(*a.Log).Info("update ing")
 	return nil
 }
+
+
+func (a *AppIngress) Delete() (err error) {
+	if a.Old == nil {
+		return nil
+	}
+	err = (*a.Client).Delete(*a.Ctx, a.Old)
+	if err != nil {
+		return err
+	}
+	(*a.Log).Info("delete ingress")
+	return
+}
+
 func (a *AppIngress) newIngress() *v1beta1.Ingress {
 	spec := v1beta1.IngressSpec{
 		Rules: []v1beta1.IngressRule{
@@ -108,9 +128,9 @@ func (a *AppIngress) newIngress() *v1beta1.Ingress {
 
 	var annotations map[string]string
 	if a.Old != nil {
-		annotations = a.generateAnnotations(spec, a.Old.Annotations)
+		annotations = a.GenerateAnnotations(spec, a.Old.Annotations)
 	} else {
-		annotations = a.generateAnnotations(spec, nil)
+		annotations = a.GenerateAnnotations(spec, nil)
 	}
 
 	return &v1beta1.Ingress{

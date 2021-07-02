@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"github.com/go-logr/logr"
 	appv1 "github.com/qinya0/k8s-operator-demo/api/v1"
+	"github.com/qinya0/k8s-operator-demo/controllers"
+	"github.com/qinya0/k8s-operator-demo/service/base"
 	v1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -17,8 +19,12 @@ import (
 )
 
 type AppDeploy struct {
-	BaseService
+	base.BaseService
 	Old *appsv1.Deployment
+}
+
+func init() {
+	controllers.RegistryInterface(&AppDeploy{})
 }
 
 func (a *AppDeploy) Name() string {
@@ -67,7 +73,7 @@ func (a *AppDeploy) NeedUpdate() (bool, error) {
 	deploy := a.newDeploy()
 
 	oldSpec := appv1.AppServiceSpec{}
-	if oldSpecStr, ok := a.Old.Annotations[AnnotationName]; ok && oldSpecStr != "" {
+	if oldSpecStr, ok := a.Old.Annotations[base.AnnotationName]; ok && oldSpecStr != "" {
 		if err := json.Unmarshal([]byte(oldSpecStr), &oldSpec); err != nil {
 			return false, err
 		}
@@ -86,6 +92,18 @@ func (a *AppDeploy) Update() error {
 	}
 	(*a.Log).Info("update deploy")
 	return nil
+}
+
+func (a *AppDeploy) Delete() (err error) {
+	if a.Old == nil {
+		return nil
+	}
+	err = (*a.Client).Delete(*a.Ctx, a.Old)
+	if err != nil {
+		return err
+	}
+	(*a.Log).Info("delete deploy")
+	return
 }
 
 func (a *AppDeploy) newDeploy() *appsv1.Deployment {
@@ -107,9 +125,9 @@ func (a *AppDeploy) newDeploy() *appsv1.Deployment {
 
 	var annotations map[string]string
 	if a.Old != nil {
-		annotations = a.generateAnnotations(spec, a.Old.Annotations)
+		annotations = a.GenerateAnnotations(spec, a.Old.Annotations)
 	} else {
-		annotations = a.generateAnnotations(spec, nil)
+		annotations = a.GenerateAnnotations(spec, nil)
 	}
 
 	return &appsv1.Deployment{

@@ -1,4 +1,4 @@
-package service
+package base
 
 import (
 	"context"
@@ -17,7 +17,7 @@ type AppInterface interface {
 	Create() error
 	NeedUpdate() (bool, error)
 	Update() error
-	Delete() error // todo 同步删除
+	Delete() error
 }
 
 type BaseService struct {
@@ -63,7 +63,7 @@ func (a *BaseService) Delete() error {
 	return nil
 }
 
-func (a *BaseService) generateAnnotations(o interface{}, old map[string]string) map[string]string {
+func (a *BaseService) GenerateAnnotations(o interface{}, old map[string]string) map[string]string {
 	if old == nil {
 		old = map[string]string{}
 	}

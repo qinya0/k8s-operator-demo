@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"github.com/go-logr/logr"
 	appv1 "github.com/qinya0/k8s-operator-demo/api/v1"
+	"github.com/qinya0/k8s-operator-demo/controllers"
+	"github.com/qinya0/k8s-operator-demo/service/base"
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,8 +18,12 @@ import (
 )
 
 type AppService struct {
-	BaseService
+	base.BaseService
 	Old *corev1.Service
+}
+
+func init() {
+	controllers.RegistryInterface(&AppService{})
 }
 
 func (a *AppService) Name() string {
@@ -67,7 +73,7 @@ func (a *AppService) NeedUpdate() (bool, error) {
 	svc := a.newService()
 
 	oldSpec := appv1.AppServiceSpec{}
-	if oldSpecStr, ok := a.Old.Annotations[AnnotationName]; ok && oldSpecStr != "" {
+	if oldSpecStr, ok := a.Old.Annotations[base.AnnotationName]; ok && oldSpecStr != "" {
 		if err := json.Unmarshal([]byte(oldSpecStr), &oldSpec); err != nil {
 			return false, err
 		}
@@ -88,6 +94,18 @@ func (a *AppService) Update() error {
 	return nil
 }
 
+func (a *AppService) Delete() (err error) {
+	if a.Old == nil {
+		return nil
+	}
+	err = (*a.Client).Delete(*a.Ctx, a.Old)
+	if err != nil {
+		return err
+	}
+	(*a.Log).Info("delete service")
+	return
+}
+
 func (a *AppService) newService() *corev1.Service {
 	spec := corev1.ServiceSpec{
 		Type:  corev1.ServiceTypeNodePort,
@@ -98,9 +116,9 @@ func (a *AppService) newService() *corev1.Service {
 	}
 	var annotations map[string]string
 	if a.Old != nil {
-		annotations = a.generateAnnotations(spec, a.Old.Annotations)
+		annotations = a.GenerateAnnotations(spec, a.Old.Annotations)
 	} else {
-		annotations = a.generateAnnotations(spec, nil)
+		annotations = a.GenerateAnnotations(spec, nil)
 	}
 
 	svc := &corev1.Service{

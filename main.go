@@ -33,6 +33,7 @@ import (
 
 	appv1 "github.com/qinya0/k8s-operator-demo/api/v1"
 	"github.com/qinya0/k8s-operator-demo/controllers"
+	_ "github.com/qinya0/k8s-operator-demo/service"
 	//+kubebuilder:scaffold:imports
 )
 
