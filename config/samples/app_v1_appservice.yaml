@@ -17,4 +17,4 @@ spec:
       value: "13"
   ingress:
     host: samples.appservice.qyapp.com
-    path: /api/v2/design
+    path: /
